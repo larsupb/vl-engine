@@ -1,0 +1,14 @@
+[project]
+name = "vl-engine for comfyui"
+description = "An engine for ComfyUI to run VL models via an remote openAI compatible API."
+version = "1.0.0"
+license = "LICENSE"
+
+[project.urls]
+Repository = "https://github.com/larsupb/vl-engine"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = "larsupb"
+DisplayName = "VL-Engine for ComfyUI"
+Icon = ""
