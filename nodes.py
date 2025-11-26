@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import io
 
 import requests
@@ -70,6 +71,8 @@ class ImageDescriptor:
         self.model_checkpoint = None
         self.processor = None
         self.model = None
+        self.last_input_hash = None
+        self.last_result = None
 
     @classmethod
     def INPUT_TYPES(s):
@@ -91,8 +94,7 @@ class ImageDescriptor:
             "optional": {
                 "image1": ("IMAGE",),
                 "image2": ("IMAGE",),
-                "image3": ("IMAGE",),
-                "video_path": ("STRING", {"default": ""}),
+                "image3": ("IMAGE",)
             },
         }
 
@@ -100,9 +102,25 @@ class ImageDescriptor:
     FUNCTION = "inference"
     CATEGORY = "VL-Engine"
 
+    def _compute_input_hash(self, text: str, model: str, api_endpoint: dict,
+                           temperature: float, max_new_tokens: int, seed: int,
+                           image_list_encoded: list) -> str:
+        """
+        Compute a hash of all inputs to detect if they have changed.
+        """
+        hasher = hashlib.sha256()
+        hasher.update(text.encode('utf-8'))
+        hasher.update(model.encode('utf-8'))
+        hasher.update(api_endpoint["endpoint_url"].encode('utf-8'))
+        hasher.update(str(temperature).encode('utf-8'))
+        hasher.update(str(max_new_tokens).encode('utf-8'))
+        hasher.update(str(seed).encode('utf-8'))
+        for img_base64 in image_list_encoded:
+            hasher.update(img_base64.encode('utf-8'))
+        return hasher.hexdigest()
+
     def inference(self, text: str, model: str, api_endpoint: dict,
-                  temperature: float, max_new_tokens: int, seed: int, image1=None, image2=None, image3=None,
-                  video_path="") -> tuple[str]:
+                  temperature: float, max_new_tokens: int, seed: int, image1=None, image2=None, image3=None) -> tuple[str]:
         """
         Generate image description using VL Engine API.
 
@@ -144,6 +162,16 @@ class ImageDescriptor:
         if image_list_encoded:
             payload["images"] = image_list_encoded
 
+        # Compute hash of all inputs to check if we can use cached result
+        current_input_hash = self._compute_input_hash(
+            text, model, api_endpoint, temperature, max_new_tokens, seed, image_list_encoded
+        )
+
+        # Return cached result if inputs haven't changed
+        if self.last_input_hash == current_input_hash and self.last_result is not None:
+            print("Using cached result (inputs unchanged)")
+            return (self.last_result,)
+
         response = requests.post(
             f"{url}/api/generate",
             json=payload,
@@ -155,6 +183,9 @@ class ImageDescriptor:
             data = response.json()
             print(data)
             description = data.get("response", "no response generated")
+            # Cache the result and input hash
+            self.last_input_hash = current_input_hash
+            self.last_result = description
             return (description,)
         else:
             raise Exception(f"Error during inference: {response.status_code} - {response.text}")
