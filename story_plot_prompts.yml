@@ -1,0 +1,62 @@
+# Story Plot Generator - LLM Prompts for 3-Step Workflow
+# These prompts are used by the StoryPlotGenerator node to create consistent 6-scene story sequences
+
+step1_foundation:
+  instruction: |
+    You are a visual storytelling expert. Based on the user's basic prompt, create a detailed foundation for a 6-scene story sequence. 
+    The story must remain simple and action-focused, suitable for only six images. 
+    The story should depict a clear, visual action (e.g., “the subject calls a taxi,” “the subject walks through the crowded airport entrance hall”). 
+    Avoid complex narrative arcs or multi-layered plot developments.
+    
+    Provide the following in JSON format:
+    - "subject": A detailed description of the main character(s), including appearance, clothing, and distinctive features.
+    - "environment": A detailed description of the setting, location, time period, and atmosphere.
+    - "plot": A simple 2–3 sentence story arc describing the narrative progression through clear physical actions.
+    - "style": The visual art style direction (e.g., "cinematic photography", "anime illustration", "oil painting").
+
+    Return ONLY valid JSON in this exact format:
+    {{"subject": "detailed character description", "environment": "detailed setting description", "plot": "story arc summary", "style": "art style direction"}}
+
+    User's basic prompt: {basic_prompt}
+
+step2_scenes:
+  instruction: |
+    You are a visual storytelling expert. Based on the plot foundation below, create 6 sequential scene descriptions that tell this story visually.
+
+    PLOT FOUNDATION:
+    - Subject: {subject}
+    - Environment: {environment}
+    - Plot: {plot}
+    - Style: {style}
+
+    Generate exactly 6 scene outlines that progress through this story. Each outline should describe the key action or moment in that scene, but keep them brief (1-2 sentences each). We will refine them in detail later.
+
+    Return ONLY valid JSON in this exact format:
+    {{"scenes": ["scene 1 outline", "scene 2 outline", "scene 3 outline", "scene 4 outline", "scene 5 outline", "scene 6 outline"]}}
+
+step3_refine:
+  instruction: |
+    You are a visual storytelling expert. Expand the following scene outline into a fully detailed, standalone image prompt.
+
+    PLOT FOUNDATION (maintain consistency):
+    - Subject: {subject}
+    - Environment: {environment}
+    - Overall Plot: {plot}
+    - Style: {style}
+
+    ALL SCENE OUTLINES (for context):
+    {scenes_context}
+
+    CURRENT SCENE TO REFINE: Scene {scene_number}
+    Outline: {scene_outline}
+
+    CRITICAL REQUIREMENTS:
+    1. This prompt will be used STANDALONE by a diffusion model with NO memory of other scenes
+    2. Include COMPLETE descriptions of: subject appearance (matching foundation), environment details, specific action/moment, lighting, composition, camera angle, mood, art style
+    3. Maintain CONSISTENCY with the plot foundation, especially subject appearance and environment
+    4. Make this scene visually distinct from the others while maintaining story continuity
+    5. NO line breaks within the prompt text
+    6. Write as a single, detailed paragraph
+
+    Return ONLY valid JSON in this exact format:
+    {{"prompt": "your fully detailed standalone scene description here"}}

@@ -1,0 +1,15 @@
+templates:
+  - name: "Detailed Enhancement"
+    instruction: "You are a prompt enhancement AI. Take the following basic prompt and expand it into a detailed, descriptive prompt suitable for image generation. Add specific details about style, lighting, composition, and atmosphere while preserving the core intent. Return ONLY valid JSON in this exact format: {{\"prompt\": \"your improved prompt here\"}}. Do not include any other text or explanation. Basic prompt: {prompt}"
+
+  - name: "Artistic Style"
+    instruction: "You are a creative writing assistant. Transform the following basic prompt into an artistic, evocative description with rich visual details, artistic style references, and mood. Use vivid language and specific art terminology. Return ONLY valid JSON in this exact format: {{\"prompt\": \"your improved prompt here\"}}. Do not include any other text or explanation. Basic prompt: {prompt}"
+
+  - name: "Technical Precision"
+    instruction: "You are a technical prompt specialist. Convert the following basic prompt into a precise, technically detailed description including camera settings, lighting conditions, exact color specifications, and composition rules. Return ONLY valid JSON in this exact format: {{\"prompt\": \"your improved prompt here\"}}. Do not include any other text or explanation. Basic prompt: {prompt}"
+
+  - name: "Cinematic"
+    instruction: "You are a cinematography expert. Rewrite the following basic prompt as a cinematic scene description, including camera angles, shot types, lighting setup, and film-like atmosphere. Return ONLY valid JSON in this exact format: {{\"prompt\": \"your improved prompt here\"}}. Do not include any other text or explanation. Basic prompt: {prompt}"
+
+  - name: "Minimal Refinement"
+    instruction: "You are a concise prompt editor. Take the following basic prompt and refine it slightly, fixing any issues and adding only essential details while keeping it brief and clear. Return ONLY valid JSON in this exact format: {{\"prompt\": \"your improved prompt here\"}}. Do not include any other text or explanation. Basic prompt: {prompt}"

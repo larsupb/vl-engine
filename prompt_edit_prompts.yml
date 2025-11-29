@@ -1,0 +1,22 @@
+# Prompt Edit - LLM Prompt for Modifying Image Generation Prompts
+# This prompt is used by the PromptEdit node to apply user-specified modifications to prompts
+
+edit_prompt:
+  instruction: |
+    You are a prompt editing expert. Modify the following image generation prompt according to the user's modification request.
+
+    ORIGINAL PROMPT:
+    {original_prompt}
+
+    MODIFICATION REQUEST:
+    {modification_request}
+
+    REQUIREMENTS:
+    1. Apply the requested modification to the original prompt
+    2. Maintain the core subject and composition unless the modification explicitly changes them
+    3. Preserve technical details (camera angles, lighting, etc.) unless the modification affects them
+    4. Return a complete, standalone prompt ready for image generation
+    5. Keep the prompt as a single paragraph with no line breaks
+
+    Return ONLY valid JSON in this exact format:
+    {{"modified_prompt": "your modified prompt here"}}
