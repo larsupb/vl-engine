@@ -105,6 +105,7 @@ class ImageDescriptor:
     RETURN_TYPES = ("STRING",)
     FUNCTION = "inference"
     CATEGORY = "VL-Engine"
+    OUTPUT_IS_LIST = (True,)
 
     def _compute_input_hash(self, text: str, model: str, api_endpoint: dict,
                            temperature: float, max_new_tokens: int, seed: int,
@@ -124,13 +125,13 @@ class ImageDescriptor:
         return hasher.hexdigest()
 
     def inference(self, text: str, model: str, api_endpoint: dict,
-                  temperature: float, max_new_tokens: int, seed: int, image1=None, image2=None, image3=None) -> tuple[str]:
+                  temperature: float, max_new_tokens: int, seed: int, image1=None, image2=None, image3=None) -> tuple[list[str]]:
         """
         Generate image description using VL Engine API.
 
-        Returns generated description as a string.
+        If image1 contains multiple images (batch > 1), processes each image sequentially.
+        Returns list of generated descriptions.
         """
-        api_type = api_endpoint["endpoint_type"]
         url = api_endpoint["endpoint_url"]
         api_key = api_endpoint["api_key"]
 
@@ -139,36 +140,41 @@ class ImageDescriptor:
             "Content-Type": "application/json",
         }
 
-        payload = {
-            "model": model,
-            "prompt": text,
-            "stream": False,
-            "temperature": temperature,
-            "max_new_tokens": max_new_tokens,
-            "seed": seed,
-        }
+        # Determine batch size from image1
+        batch_size = 1
+        if image1 is not None:
+            batch_size = image1.shape[0]
 
-        image_list = [image1, image2, image3]
-        # Remove None images and encode to base64
-        image_list = [img for img in image_list if img is not None]
-        # Convert image tensors to PIL images and then to base64
-        image_list = [tensor_to_pil(img) for img in image_list]
-
-        image_list_encoded = []
-        for idx, img in enumerate(image_list):
-            if img is not None:
-                if img.mode not in ("RGB", "RGBA"):
-                    img = img.convert("RGB")
+        # Convert optional context images (image2, image3) to base64 once
+        context_images_encoded = []
+        for context_img in [image2, image3]:
+            if context_img is not None:
+                pil_img = tensor_to_pil(context_img, batch_index=0)
+                if pil_img.mode not in ("RGB", "RGBA"):
+                    pil_img = pil_img.convert("RGB")
                 buf = io.BytesIO()
-                img.save(buf, format="PNG")
+                pil_img.save(buf, format="PNG")
                 image_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-                image_list_encoded.append(image_base64)
-        if image_list_encoded:
-            payload["images"] = image_list_encoded
+                context_images_encoded.append(image_base64)
+
+        # Encode all images from image1 batch for hash computation
+        all_images_encoded = []
+        if image1 is not None:
+            for batch_idx in range(batch_size):
+                pil_img = tensor_to_pil(image1, batch_index=batch_idx)
+                if pil_img.mode not in ("RGB", "RGBA"):
+                    pil_img = pil_img.convert("RGB")
+                buf = io.BytesIO()
+                pil_img.save(buf, format="PNG")
+                image_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+                all_images_encoded.append(image_base64)
+
+        # Include context images in hash
+        all_images_for_hash = all_images_encoded + context_images_encoded
 
         # Compute hash of all inputs to check if we can use cached result
         current_input_hash = self._compute_input_hash(
-            text, model, api_endpoint, temperature, max_new_tokens, seed, image_list_encoded
+            text, model, api_endpoint, temperature, max_new_tokens, seed, all_images_for_hash
         )
 
         # Return cached result if inputs haven't changed
@@ -176,23 +182,56 @@ class ImageDescriptor:
             print("Using cached result (inputs unchanged)")
             return (self.last_result,)
 
-        response = requests.post(
-            f"{url}/api/generate",
-            json=payload,
-            headers=headers,
-            timeout=120,
-        )
+        # Setup progress bar for batch processing
+        pbar = comfy.utils.ProgressBar(batch_size)
 
-        if response.status_code == 200:
-            data = response.json()
-            print(data)
-            description = data.get("response", "no response generated")
-            # Cache the result and input hash
-            self.last_input_hash = current_input_hash
-            self.last_result = description
-            return (description,)
-        else:
-            raise Exception(f"Error during inference: {response.status_code} - {response.text}")
+        # Process each image in the batch
+        descriptions = []
+        for batch_idx in range(batch_size):
+            print(f"Processing image {batch_idx + 1}/{batch_size}...")
+
+            # Build payload for this specific image
+            payload = {
+                "model": model,
+                "prompt": text,
+                "stream": False,
+                "temperature": temperature,
+                "max_new_tokens": max_new_tokens,
+                "seed": seed,
+            }
+
+            # Add current image from batch + context images
+            current_images = []
+            if image1 is not None:
+                current_images.append(all_images_encoded[batch_idx])
+            current_images.extend(context_images_encoded)
+
+            if current_images:
+                payload["images"] = current_images
+
+            # Make API request
+            response = requests.post(
+                f"{url}/api/generate",
+                json=payload,
+                headers=headers,
+                timeout=120,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                print(data)
+                description = data.get("response", "no response generated")
+                descriptions.append(description)
+            else:
+                raise Exception(f"Error during inference for image {batch_idx + 1}: {response.status_code} - {response.text}")
+
+            pbar.update(1)
+
+        # Cache the result and input hash
+        self.last_input_hash = current_input_hash
+        self.last_result = descriptions
+
+        return (descriptions,)
 
 
 class PromptImprove:
