@@ -489,6 +489,10 @@ class StoryPlotGenerator:
                     {"default": 1024, "min": 128, "max": 2048, "step": 1},
                 ),
                 "seed": ("INT", {"default": -1}),
+                "timeout": (
+                    "INT",
+                    {"default": 240, "min": 10, "max": 9999, "step": 10},
+                ),
             },
         }
 
@@ -503,7 +507,8 @@ class StoryPlotGenerator:
                            plot_temperature: float, plot_max_tokens: int,
                            scene_temperature: float, scene_max_tokens: int,
                            refine_temperature: float, refine_max_tokens: int,
-                           seed: int) -> str:
+                           seed: int,
+                           timeout: int) -> str:
         """Compute a hash of all inputs to detect if they have changed."""
         hasher = hashlib.sha256()
         hasher.update(basic_prompt.encode('utf-8'))
@@ -516,10 +521,11 @@ class StoryPlotGenerator:
         hasher.update(str(refine_temperature).encode('utf-8'))
         hasher.update(str(refine_max_tokens).encode('utf-8'))
         hasher.update(str(seed).encode('utf-8'))
+        hasher.update(str(timeout).encode('utf-8'))
         return hasher.hexdigest()
 
     def _call_llm(self, url: str, api_key: str, model: str, prompt: str,
-                  temperature: float, max_tokens: int, seed: int) -> dict:
+                  temperature: float, max_tokens: int, seed: int, timeout: int) -> dict:
         """Make a single LLM API call and return parsed JSON response."""
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -540,7 +546,7 @@ class StoryPlotGenerator:
             f"{url}/api/generate",
             json=payload,
             headers=headers,
-            timeout=120,
+            timeout=timeout,
         )
 
         if response.status_code == 200:
@@ -557,7 +563,7 @@ class StoryPlotGenerator:
                                 plot_temperature: float, plot_max_tokens: int,
                                 scene_temperature: float, scene_max_tokens: int,
                                 refine_temperature: float, refine_max_tokens: int,
-                                seed: int) -> tuple[list[str], str]:
+                                seed: int, timeout: int) -> tuple[list[str], str]:
         """
         Generate a 6-scene story sequence using a 3-step LLM workflow.
 
@@ -580,7 +586,8 @@ class StoryPlotGenerator:
             plot_temperature, plot_max_tokens,
             scene_temperature, scene_max_tokens,
             refine_temperature, refine_max_tokens,
-            seed
+            seed,
+            timeout
         )
 
         # Return cached result if inputs haven't changed
@@ -596,7 +603,7 @@ class StoryPlotGenerator:
         step1_prompt = step1_template.format(basic_prompt=basic_prompt)
 
         foundation = self._call_llm(url, api_key, model, step1_prompt,
-                                    plot_temperature, plot_max_tokens, seed)
+                                    plot_temperature, plot_max_tokens, seed, timeout)
         pbar.update(1)  # Progress: 1/8 complete
 
         subject = foundation.get("subject", "")
@@ -617,7 +624,7 @@ class StoryPlotGenerator:
         )
 
         scenes_data = self._call_llm(url, api_key, model, step2_prompt,
-                                     scene_temperature, scene_max_tokens, seed)
+                                     scene_temperature, scene_max_tokens, seed, timeout)
         pbar.update(1)  # Progress: 2/8 complete
 
         scene_outlines = scenes_data.get("scenes", [])
@@ -648,7 +655,7 @@ class StoryPlotGenerator:
             )
 
             refined_data = self._call_llm(url, api_key, model, step3_prompt,
-                                         refine_temperature, refine_max_tokens, seed)
+                                         refine_temperature, refine_max_tokens, seed, timeout)
             pbar.update(1)  # Progress: 3-8/8 complete (one for each scene)
 
             refined_prompt = refined_data.get("prompt", "")
